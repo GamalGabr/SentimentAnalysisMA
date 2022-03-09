@@ -1,0 +1,861 @@
+---
+title: "A Foray into Text Mining"
+author: "Gamal Gabr"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    df_print: paged
+    toc: yes
+  github_document:
+    code_folding: show
+    number_sections: yes
+    toc: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message=FALSE)
+```
+
+```{r} 
+#suppress warnings globally
+options(warn=-1)
+```
+```{r}
+options(scipen = 999)              #suppress the appearance of scientific notation throughout the analysis
+```
+
+
+
+
+
+
+
+
+
+
+<!--
+Here, I draw upon the following [resource](https://rpubs.com/Manh-Tran/633936) and this brilliant reosurce for in-depth text analysis https://m-clark.github.io/text-analysis-with-R/shakespeare.html 
+--> 
+
+
+
+
+
+
+<!--
+<span style="color:#00afbb;">Does this work?</span>
+
+This is how you add additional line spacing
+&nbsp;
+&nbsp;
+between lines.
+
+
+![A new image](https://en.wikipedia.org/wiki/Morrisons#/media/File:MorrisonsLogo.svg)
+
+
+I recommend this [link](https://dev.to/soumikdhar/how-to-write-better-cleaner-markdown-the-definitive-guide-3fif)
+
+
+
+https://bookdown.org/yihui/rmarkdown-cookbook/figure-size.html  (how to control the  size of images)
+
+
+
+![A remote image](https://upload.wikimedia.org/wikipedia/en/8/80/Wikipedia-logo-v2.svg)
+
+{r, echo=FALSE, out.width="10%", fig.cap="A nice image."}
+knitr::include_graphics("https://upload.wikimedia.org/wikipedia/en/8/80/Wikipedia-logo-v2.svg")
+
+
+
+
+
+{r, echo=FALSE,out.width="49%",out.height="49%",fig.show='hold',
+fig.align='center', fig.cap="This is the main caption - Years 2020 - 2030 - the main caption."}
+knitr::include_graphics(c("https://upload.wikimedia.org/wikipedia/en/8/80/Wikipedia-logo-v2.svg","https://upload.wikimedia.org/wikipedia/en/8/80/Wikipedia-logo-v2.svg"))-->
+
+
+```{r, message=FALSE}
+# load necessary libraries
+library(tidytext)
+library(tidyverse)
+library(rvest)
+library(ggplot2)
+library(sentimentr)
+library(gridExtra)
+library(kableExtra)
+library(lubridate)
+```
+
+### PROJECT MISSION AND RESEARCH FINDINGS 
+<br />
+
+
+
+I encountered an interesting online agency known as <font color="orange">Breakroom</font>, who self-describe as 'the people-powered job comparison site for hourly work'. They conduct research examining employee satification in the workplace. In 2020, their research suggested that Aldi employees were the happiest of supermarket employees with Morrisons staff being the least satisfied of supermarket employees.
+
+
+I was curious to see whether a little webscraping coupled with subsequent textual/sentiment analysis could corroborate this. I set out on an interesting adventure : I was on a expedition into the fascinating world of <font color=" #8F00FF">sentiment analysis!</font>
+Sentiment analysis is a form of text analytics that generally entails analysing textual output, whether it be a review or a book, and producing an overall score that reflects the corresponding level of positivity contained within the respective material.
+
+
+My first mission was to obtain some data to analyse. Employing the specialised *SelectorGadget*  Google Chrome Extension tool and the superb *Rvest* package for <font color="#245ee5">R</font>, I was able to extract the CSS Selector nodes encoding reviews for Aldi and Morrisons employees from the *Indeed* website. I obtained four types of information from the `Indeed` website: the main review nodes provided by employees, in addition to nodes pertaining to the cons, pros and dates of the reviews.    
+
+In no way do I claim that the findings in this mini-project are suitable for making definitive statements. This project was largely an exercise in curiousity and is primarily intended to showcase the ease with which sentiment analysis can be conducted in the programming language of <font color="#245ee5">R</font>. There are clear methodological shortcomings in this research, however I shall spare you the pain of enumerating them!
+
+### KEY FINDINGS
+
+<br/>
+
+* Employing an alpha level of p<0.05,  the average sentiment expressed by Aldi empoyees was found to be significantly higher than that expressed by Morrisons employees in 2020. This was consistent with research conducted by <font color="orange">Breakroom</font>. <!--The p-value was less than the conventional alpha (p< .05). -->
+
+* In terms of unigrams (one-word sequences), Morrisons staff mentioned <font color="seagreen">discount, staff and pay</font> with the greatest frequency in the `PROs` section, whereas Aldi staff mentioned <font color="navy">pay, paid, and free</font> with the greatest frequency. 
+
+* Aldi and Morrisons staff both cited <font color="red">poor management</font> as the foremost CON.
+
+<!--Morrisons staff cited `staff discount` then `discount card` with the greatest frequency as pro bigrams, whereas ALdi staff mentioned paid breaks then hourly rate.-->
+
+
+<!-- <h2 style="color:blue;">OBTAINING THE RAW DATA!</h2> -->
+
+<br/>
+
+I obtained the raw data using the following code stream: 
+
+
+
+```{r, eval=FALSE}
+#establish empty dataset
+ALDI.df <- data.frame(DATE=character(),
+                       DATE=character(),
+                       OPINION=character(),
+                       PROS=character(),
+                       CONS=character(),
+                        
+                       
+                stringsAsFactors=FALSE)
+
+#command rvest to cycle through specified pages
+
+for (i in seq(0, 2000, 20)){
+             url_ds <- paste0('https://uk.indeed.com/cmp/Aldi/reviews?start=',i)
+ var <- read_html(url_ds)
+    
+  #instuct rvest to read HTML 
+   DATE <-  var %>%
+html_nodes('.cmp-ReviewAuthor') %>%
+     html_text() %>%
+    str_extract("(\\w+.+)+")
+   
+  #instuct rvest to read Review HTML
+  OPINION <- var %>%
+    html_nodes('.cmp-NewLineToBr-text') %>%
+    html_text() %>%
+    str_extract("(\\w+).+")
+  
+     #extract pros 
+  PROS <-var %>%
+       html_nodes('.cmp-ReviewProsCons-prosText') %>% html_text() %>%
+         str_extract("(\\w+).+")
+
+   #instuct rvest to read CONS HTML
+  CONS <-var %>%
+       html_nodes(' .cmp-ReviewProsCons-consText ') %>% html_text() %>%
+         str_extract("(\\w+).+")
+
+   #bind collected data together
+ALDI.df <- rbind(ALDI.df, as.data.frame(cbind(DATE,
+                                                    OPINION, PROS,CONS)))}
+
+
+#now create a separate data frame for Morrisons
+
+MORRISONS.df <- data.frame(DATE=character(),
+                       DATE=character(),
+                       OPINION=character(),
+                       PROS=character(),
+                       CONS=character(),
+                        
+                       
+                       stringsAsFactors=FALSE)
+for (i in seq(0, 2000, 20)){
+             url_ds <- paste0('https://uk.indeed.com/cmp/Wm-Morrisons-Supermarkets/reviews?start=',i)
+  var <- read_html(url_ds)
+    
+  # Date
+   DATE <-  var %>%
+html_nodes('.cmp-ReviewAuthor') %>%
+     html_text() %>%
+    str_extract("(\\w+.+)+")
+   
+  # Actual Review
+  OPINION <- var %>%
+    html_nodes('.cmp-NewLineToBr-text') %>%
+    html_text() %>%
+    str_extract("(\\w+).+")
+  
+     #extract pros 
+  PROS <-var %>%
+       html_nodes('.cmp-ReviewProsCons-prosText') %>% html_text() %>%
+         str_extract("(\\w+).+")
+     
+    #instuct rvest to read CONS HTML
+  CONS <-var %>%
+       html_nodes(' .cmp-ReviewProsCons-consText ') %>% html_text() %>%
+         str_extract("(\\w+).+")
+
+    #bind collected data together
+MORRISONS.df <- rbind(MORRISONS.df, as.data.frame(cbind(DATE,
+                                                    OPINION, PROS,CONS)))}
+
+I decided to provide this dataframe with a group identifier - Morrisons employees.
+
+
+ALDI.df$company<-rep("ALDI", times = 1270)
+MORRISONS.df$company<-rep("MORRISONS", times = 1855)
+
+
+#Combine dataframes
+COMBINATION.df<-bind_rows(ALDI.df, MORRISONS.df)
+
+write.csv(COMBINATION.df, file = "COMBINEDREVIEWS.csv")
+```
+
+<br/>
+
+I have opted to withhold displaying the collected dataframe in its raw form. Whilst the data used in this analysis is publicly available on the `Indeed` website and does not include names; I have still decided to entirely avoid entering the quagmire of ethical greyness associated with the usage of information in which questions relating to annoymity may arise. 
+
+
+### CLEANING THE DATA
+
+<br />
+
+```{r}
+#load the formerly saved dataframe
+#COMBINED.df <- read.csv('COMBINEDREVIEWS.csv')
+#COMINDED.df<-read.csv("C:/Users/gamal/Desktop/SentimentAnalysisMA/Combinedreviews.csv")
+COMBINED.df <- read.csv('Combinedreviews.csv')
+
+
+```
+
+```{r}
+# convert variables from list to character
+COMBINED.df$DATE<-as.character(COMBINED.df$DATE)
+
+COMBINED.df$OPINION<-as.character(COMBINED.df$OPINION)
+
+COMBINED.df$PROS<-as.character(COMBINED.df$PROS)
+
+COMBINED.df$CONS<-as.character(COMBINED.df$CONS)
+
+
+```
+
+<br/>
+
+The original data contained in the `date` section was accompanied by a host of irrelevant information;I wanted to extract the date alone. Here is the code I used:
+
+
+
+```{r}
+#extract date from surrounding text
+library(stringr)
+COMBINED.df$DATE<-str_extract(COMBINED.df$DATE,"([0-9]{1,2})[- .]([a-zA-Z]+)[- .]([0-9]{4})" )
+```
+
+```{r}
+#correct date format
+COMBINED.df$DATE<-dmy(COMBINED.df$DATE)
+```
+
+```{r}
+#group by month/year
+COMBINED.df$Month_Yr <- format(as.Date(COMBINED.df$DATE), "%Y-%m")
+```
+
+```{r}
+#extract Year as separate column
+COMBINED.df$Year<-as.numeric(format(COMBINED.df$DATE, "%Y"))
+```
+```{r}
+#extract month as separate variable
+COMBINED.df$month<-as.numeric(format(COMBINED.df$DATE, "%m"))
+```
+
+
+```{r}
+#recruit lubridate to extract month
+COMBINED.df = COMBINED.df %>%
+mutate(Month=floor_date(DATE, "month"))
+```
+
+
+```{r}
+#remove NA entries
+COMBINED.df<-COMBINED.df%>%drop_na()
+```
+
+
+
+```{r}
+#eliminate duplicates based on opinions
+COMBINED.df<-COMBINED.df[!duplicated(COMBINED.df$OPINION), ]
+```
+
+<br/>
+
+During my initial attempts to analyse the sentiment contained within text, I found that some of the packages currently used for sentiment analysis purposes were beset with unacceptable limitations. Of particular concern, a number of the packages that I encountered did not adequately address negations. For instance, such packages typically failed to clearly distinguish between phrases such as <font color="#6495ED">it was good</font> and <font color="#FF0000">it was not good</font>. Thankfully, I eventually discovered the par excellence <font color="#800080">sentimentr</font> package which takes into account the impact of various valence shifters (i.e. amplifiers, downtoners and negators) when calculating sentiment. If you are interested in obtaining a more in-depth analysis of how the  _sentimentr_ package calculates sentiment, I would recommend following this [link](https://www.semion.io/doc/a-review-of-sentiment-computation-methods-with-r-packages)
+
+
+
+### DEMONSTRATION OF SENTIMENTR ANALYSIS AT WORK:
+
+<br/>
+
+The *sentiment_by* function of the `sentimentr` packages aggregates/averages scores for selected sections of text. Below, is a demonstration of sentimentr at work! 
+
+```{r}
+sentiment_by('I do not like jaffa cakes. I hate being chased by giant squirrels', by=NULL)
+```
+
+
+
+
+```{r}
+sentiment_by('I like jaffa cakes. I love being chased by giant squirrels', by=NULL)
+```
+
+In accordance with expectation, `sentimentr` scores the first and second block of sentences negatively and positively respectively. 
+
+For a little more nuance, the *sentiment* function can be used for the breakdown of sentiment in relation to individual sentences
+
+```{r}
+sentiment('I do not like jaffa cakes. I hate being chased by giant squirrels', by=NULL)
+```
+<br/>
+
+### CLEAN TEXT USING GENERIC CLEANER
+
+<br />
+
+For usage in previous text mining projects, I constructed a simple function that cleans text. Here, I summoned its aid:
+
+```{r}
+#construct text cleaner
+Text.cleaner = function(x)
+
+{x = gsub("&amp","", x)
+
+x = gsub("(RT)((?:\\b\\w*@\\w+)+)","", x)
+
+x= gsub("^RT","", x)
+
+#remove @ individuals
+
+x= gsub("@\\w+","", x) 
+
+# remove punctuation
+
+x= gsub("[[:punct:]]","", x)
+
+# eliminate digits
+
+x= gsub("[[:digit:]]+\\s","", x)
+
+# eliminate html links
+
+x= gsub("http\\w+","", x)
+
+#eliminate unnecessary spaces
+
+x= gsub("[ \t]{2,}"," ", x)
+
+x= gsub("^\\s+|\\s+$", "", x)
+
+# remove emojis 
+
+x= iconv(x, "latin1", "ASCII", sub="")
+
+#correct possesives
+
+x= gsub("'s","", x) 
+
+
+
+try.error = function(z) #convert text to lowercase
+{
+y = NA
+try_error = tryCatch(tolower(z), error=function(e) e)
+if (!inherits(try_error, "error"))
+y = tolower(z)
+return(y)
+}
+x = sapply(x, try.error)
+return(x)}
+```
+
+
+
+```{r}
+# apply text cleaning function defined above to all relevant text
+
+COMBINED.df$OPINION<-Text.cleaner(COMBINED.df$OPINION)
+
+
+COMBINED.df$PROS<-Text.cleaner(COMBINED.df$PROS)
+
+
+COMBINED.df$CONS<-Text.cleaner(COMBINED.df$CONS)
+```
+
+After purging the text of irregularities, I employed the *sentiment_by* function to obtain the average sentiment score per review. This function attempts to quantify the valence and polarity of particular chunks of text. Higher scores are associated with higher levels of positive sentiment.
+
+<br />
+
+
+
+```{r, options(scipen=999)}
+#obtain average sentiment per review
+sentiment.df<-sentiment_by(get_sentences(COMBINED.df$OPINION))
+```
+
+
+
+
+
+
+
+
+
+```{r}
+#combine dataframes for graphing
+second.set<-bind_cols(COMBINED.df,sentiment.df)
+```
+
+### GROUPING PRIOR TO VISUALISATION
+
+<br />
+
+
+It was clearly important to determine how many reviews per company this particular web scraping expedition collected. I addressed this question with a little code: 
+
+```{r}
+second.set%>%group_by(Year, company)%>%summarise(count = n()) %>% arrange(Year, desc(count))%>%kbl() %>%kable_material_dark()
+```
+<br/>
+
+This table proved illuminating! By far and away, 2020 had the most featured reviews, with 909 unique reviews for Morrisons and 613 reviews for Asda. In light of the scarcity of reviews from neighbouring years, I decided to confine this particular study to the year of 2020. 
+
+<!--I obtained inspiration for the table formatting from [this resource](https://cran.r-project.org/web/packages/kableExtra/vignettes/awesome_table_in_html.html).-->
+
+<br />
+Here, I visualise the average sentiment across the months of 2020.
+
+```{r, out.width="150%", fig.height=5, class.source = 'fold-hide'}
+
+# original graphing, group data before visualisation
+
+#call library
+library(ggthemes)
+
+# prepare data
+prep.data<-second.set%>%filter(Year==2020)%>%group_by(Month, company)%>%summarise(avg.sent=mean(ave_sentiment)) 
+ 
+#plot
+library(ggplot2)
+ggplot(prep.data, 
+       aes(x=Month, y= avg.sent, color=company)) +
+       geom_line()+
+   
+  geom_vline(xintercept = 3.2, colour = "red")+
+       scale_x_date(date_breaks = "month",
+               date_labels = "%Y %b")+
+       labs(title = 'Average sentiment across 2020',
+        x = NULL,
+        y = 'Sentiment') +
+    theme_economist() +
+    theme(axis.text.x = element_text(colour="grey20", size=12, angle=90, hjust=.5, vjust=.5),
+                        axis.text.y = element_text(colour="grey20", size=12),
+          text=element_text(size=16))
+```
+
+<br/>
+
+#### SENTIMENT STATISTICALLY DIFFERENT ?
+
+<br/>
+
+I decided to subject the differences in average sentiment across the two companies to a little more scrutiny. It was time for a <font color="#FFBF00">t-test</font>!
+
+<br/>
+
+```{r}
+#subset 2020 for sentiment comparison
+
+twenty.twenty<-second.set[second.set$Year %in% 2020,]
+
+library("ggpubr")
+ggboxplot(twenty.twenty, x = "company", y = "ave_sentiment", 
+          color = "company", palette = c("navy", "yellow"),
+        ylab = "ave_sentiment", xlab = "Groups")
+
+```
+<br />
+
+```{r}
+t.table<-twenty.twenty%>%group_by(company)%>%
+  summarise(
+    count = n(),
+    overall.mean = mean(ave_sentiment, na.rm = TRUE),
+    sd = sd(ave_sentiment, na.rm = TRUE)
+  )
+```
+
+<!--I compared the distribution of overall sentiment per company.
+
+```{r}
+with(twenty.twenty, shapiro.test(ave_sentiment[company == "ALDI"]))
+```
+```{r}
+with(twenty.twenty, shapiro.test(ave_sentiment[company == "MORRISONS"]))
+```  
+-->
+
+<!--
+The Shapiro–Wilk test evaluates assumptions of normality.
+The null-hypothesis underpinning this assessment is that the population is normally distributed.
+
+At an alpha level/significance level of 0.05, a resultant p-value <.05 result prompts rejection of the null hypothesis that the respective data stems from a population characterised by a normal distribution.-->
+
+<!--In cases where the sample size is sufficiently high (generally n>30), normality is not required for t- tests. I decided to evaluate whether the average sentiment scores whether significantly different by employing a Welch Two Sample t-test-->
+
+
+
+```{r}
+t.test(ave_sentiment ~ company, data = twenty.twenty)
+```
+
+Here, I used Welch's t-test, otherwise known as an unequal variances t-test. This test assesses whether two populations share equal means. In keeping with tradition, I employed an alpha level of 0.05: the results obtained suggest that Aldi employees are indeed happier than their Morrisons counterparts (p<0.05).
+
+
+### INSPECTING N-GRAMS!
+
+<br/>
+<!--
+Here, I draw upon the following [resource](https://rpubs.com/Manh-Tran/633936)
+-->
+In the domain of computational linguistics, an N-gram is a contiguous sequence of n objects from a selected sample of text/speech. The objects can be words, phonemes, or syllables. 
+
+In this particular analysis, I decided to solely examine word related N-grams.A unigram is simply a one-word sequence, whereas a  bigram is a two-word sequence, and not surprisingly a trigram is a three-word sequence of words! I commenced my analysis of N-grams by looking at the most commonly occurring single words featured within the PROs sections.
+
+<br/>
+
+
+
+```{r}
+# custom stop words, to be removed from analysis
+custom_stop_words <- tibble(word = c("na","aldi", "morrisons"))
+```
+
+
+```{r}
+word_frequency1<-COMBINED.df%>%filter(company=="ALDI")%>%unnest_tokens(word,PROS)%>%anti_join(stop_words)%>%anti_join(custom_stop_words)%>%drop_na()%>%count(word, sort=TRUE)
+```
+
+```{r}
+AP<-word_frequency1%>%top_n(8)%>%mutate(word = reorder(word, n))%>%ggplot(aes(x=n, y=word))+                            geom_col(color = "tan1", fill = "navy")+
+  labs(title = "Aldi",
+       subtitle = "Aldi most Frequent PRO words",
+       x = "",
+       y = "Frequency",
+       caption = "Aldi") +
+  theme(plot.caption = element_text(face = "italic"))
+```
+
+```{r}
+word_frequency2<-COMBINED.df%>%filter(company=="MORRISONS")%>%unnest_tokens(word,PROS)%>%anti_join(stop_words)%>%anti_join(custom_stop_words)%>%drop_na()%>%count(word, sort=TRUE)
+```
+
+```{r}
+MP<-word_frequency2%>%top_n(8)%>%mutate(word = reorder(word, n))%>%ggplot(aes(x=n, y=word))+                            geom_col(color = "yellow", fill = "seagreen")+
+labs(title = "Morrisons",
+       subtitle = "Morrisons most Frequent PRO Words",
+       x = "",
+       y = "",
+       caption = "Morrisons") +
+  theme(plot.caption = element_text(face = "italic"))
+```
+
+
+```{r}
+library(gridExtra)
+grid.arrange(AP, MP, nrow = 1)
+```
+
+### MOST FRQUENT CON WORDS 
+
+<br/>
+I decided to compare the most frequently occurring single words in the CONs sections
+
+```{r}
+word_frequency_CONS.A<-COMBINED.df%>%filter(company=="ALDI")%>%unnest_tokens(word,CONS)%>%anti_join(stop_words)%>%anti_join(custom_stop_words)%>%drop_na()%>%count(word, sort=TRUE)
+```
+
+```{r}
+AC<-word_frequency_CONS.A%>%top_n(8)%>%mutate(word = reorder(word, n))%>%ggplot(aes(x=n, y=word))+                            geom_col(color = "tan1", fill = "navy")+
+  labs(title = "Aldi",
+       subtitle = "Aldi's most frequent CON related words",
+       x = "",
+       y = "Frequency",
+       caption = "Aldi") +
+  theme(plot.caption = element_text(face = "italic"))
+```
+
+```{r}
+word_frequency_CONS.B<-COMBINED.df%>%filter(company=="MORRISONS")%>%unnest_tokens(word,CONS)%>%anti_join(stop_words)%>%anti_join(custom_stop_words)%>%drop_na()%>%count(word, sort=TRUE)
+```
+
+```{r}
+MC<-word_frequency_CONS.B%>%top_n(8)%>%mutate(word = reorder(word, n))%>%ggplot(aes(x=n, y=word))+                            geom_col(color ="yellow", fill = "seagreen")+
+labs(title = "Morrisons",
+       subtitle = "Top Morrisons CON related words",
+       x = "",
+       y = "",
+       caption = "Morrisons") +
+  theme(plot.caption = element_text(face = "italic"))
+```
+
+
+```{r}
+library(gridExtra)
+grid.arrange(AC, MC, nrow = 1)
+```
+
+
+
+
+
+
+<!--I shall be working with the **[tidytext](https://www.r-bloggers.com/2019/07/visualizing-locke-and-mill-a-tidytext-analysis/)**.
+**[EFF](https://eff.org)**.
+
+
+It may well be worth consulting [this](https://richpauloo.github.io/2017-12-29-Using-tidytext-to-make-word-clouds/) for tidytext advanced analysis as well instuction on how to produce wordclouds
+
+(DRAWING UPON:)
+https://stephenturner.github.io/workshops/r-textmining.html-->
+
+
+### BIGRAMS
+
+<br/>
+
+I went on to examine bigrams for Morrisons employees commencing with a comparison of the most frequently employed bigrams in the OPINION section.Below, I analysed the frequency with which two particular words appeared together consecutively across the text featured in the `OPINION` section
+
+```{r}
+#extract bigrams
+MORRISON_bigrams <- second.set %>%filter(company=="MORRISONS")%>%
+unnest_tokens(bigram, OPINION, token = "ngrams", n = 2)
+```
+
+I was then easily able to discover the words that co-occur with the greatest frequency:
+
+```{r, results=FALSE}
+#display bigrams in descending order
+MORRISON_bigrams %>%
+count(bigram, sort = TRUE)
+```
+
+Lots of the the bigrams are commonly occurring expressions such as "to be" and "when is"- in the lingo of sentiment analysis, these are often referred to as *stop words*. I decided to eliminate some of this clutter. I hoped that removing this noise would enable me to easily detect genuine insight. 
+
+
+```{r}
+library(tidyr)
+
+MORRISON_bigrams_separated <- MORRISON_bigrams %>%
+separate(bigram, c("word1", "word2"), sep = " ")
+
+MORRISON_bigrams_filtered <- MORRISON_bigrams_separated %>%
+  filter(!word1 %in% stop_words$word) %>%
+  filter(!word2 %in% stop_words$word)%>%filter(!word1 %in% custom_stop_words$word) %>%
+  filter(!word2 %in% custom_stop_words$word)%>%unite(bigram, word1, word2, sep = " ")
+```
+
+```{r}
+#arrange bigrams in descending order
+MORRISON_bigram_count <- MORRISON_bigrams_filtered%>% ungroup()%>% count(bigram, sort = TRUE)
+```
+```{r}
+#remove row 2 as NA 
+MORRISON_bigram_count<-MORRISON_bigram_count[-1,]
+```
+```{r}
+# arrange graphical display of top Morrison bigrams
+BMC<-MORRISON_bigram_count%>%top_n(10)%>% mutate(bigram = reorder(bigram, n))%>%ggplot(aes(bigram, n)) +
+geom_col(color = "yellow", fill = "seagreen") +
+ggtitle("Top bigrams given by Morrison employees") +
+xlab(NULL) +
+ylab(NULL) +
+coord_flip()
+```
+
+### ALDI BIGRAMS
+
+<br/>
+
+It was time to examine the OPINION related bigrams for Aldi employees.
+
+```{r}
+ALDI_bigrams <-second.set %>%filter(company=="ALDI")%>%
+unnest_tokens(bigram, OPINION, token = "ngrams", n = 2)
+```
+
+```{r, results=FALSE}
+ALDI_bigrams %>%
+count(bigram, sort = TRUE)
+```
+
+
+```{r}
+library(tidyr)
+
+ALDI_bigrams_separated <- ALDI_bigrams %>%
+separate(bigram, c("word1", "word2"), sep = " ")
+
+ALDI_bigrams_filtered <- ALDI_bigrams_separated %>%
+  filter(!word1 %in% stop_words$word) %>%
+  filter(!word2 %in% stop_words$word)%>%filter(!word1 %in% custom_stop_words$word) %>%
+  filter(!word2 %in% custom_stop_words$word)%>%unite(bigram, word1, word2, sep = " ")
+```
+
+```{r}
+#arrange bigrams in descending order
+ALDI_bigram_count <- ALDI_bigrams_filtered%>% ungroup()%>% count(bigram, sort = TRUE)
+```
+
+```{r}
+#remove row 2 as NA 
+ALDI_bigram_count<-ALDI_bigram_count[-2,]
+```
+```{r}
+# arrange graphical display of top Morrison bigrams
+BAC<-ALDI_bigram_count%>%top_n(10)%>% mutate(bigram = reorder(bigram, n)) %>%ggplot(aes(bigram, n)) +
+geom_col(color = "tan1", fill = "navy") +
+ggtitle("Top bigrams given by Aldi employees") +
+xlab(NULL) +
+ylab(NULL) +
+coord_flip()
+```
+
+```{r}
+library(gridExtra)
+grid.arrange(BAC, BMC, nrow = 2)
+```
+
+
+
+### MOST POPULAR BIGRAM 'PROS' 
+<br/>
+
+It was time to compare the most frequent bigrams featured in the PROs section
+
+<br/>
+
+```{r}
+MORRISON_bigrams_PROS <- second.set %>%filter(company=="MORRISONS")%>%
+unnest_tokens(bigram, PROS, token = "ngrams", n = 2)
+```
+
+
+```{r, results="hide"}
+MORRISON_bigrams_PROS %>%
+count(bigram, sort = TRUE)
+```
+
+```{r}
+library(tidyr)
+
+MORRISON_bigrams_separated_PROS <- MORRISON_bigrams_PROS %>%
+separate(bigram, c("word1", "word2"), sep = " ")
+
+MORRISON_bigrams_filtered_PROS <- MORRISON_bigrams_separated_PROS %>%
+  filter(!word1 %in% stop_words$word) %>%
+  filter(!word2 %in% stop_words$word)%>%filter(!word1 %in% custom_stop_words$word) %>%
+  filter(!word2 %in% custom_stop_words$word)%>%unite(bigram, word1, word2, sep = " ")
+```
+
+```{r}
+#arrange bigrams in descending order
+MORRISON_bigram_count_PROS <- MORRISON_bigrams_filtered_PROS%>% ungroup()%>% count(bigram, sort = TRUE)
+```
+```{r}
+#remove row 2 as NA 
+MORRISON_bigram_count_PROS<-MORRISON_bigram_count_PROS[-1,]
+```
+```{r}
+# arrange graphical display of top 5 Morrison bigrams
+BMCP<-MORRISON_bigram_count_PROS%>%top_n(5)%>% mutate(bigram = reorder(bigram, n)) %>%ggplot(aes(bigram, n)) +
+geom_col(color = "yellow", fill = "seagreen") +
+ggtitle("Top 5 bigram PROS given by Morrison employees") +
+xlab(NULL) +
+ylab(NULL) +
+coord_flip()
+```
+
+<!--<h2 style="color:blue;">MOST POPULAR BIGRAM PROS</h2>-->
+
+I then examined the PRO related bigrams for Aldi employees
+
+```{r}
+ALDI_bigrams_PROS <-second.set %>%filter(company=="ALDI")%>%
+unnest_tokens(bigram, PROS, token = "ngrams", n = 2)
+```
+
+
+```{r, results="hide"}
+ALDI_bigrams_PROS %>%
+count(bigram, sort = TRUE)
+```
+
+
+```{r}
+library(tidyr)
+
+ALDI_bigrams_separated_PROS <- ALDI_bigrams_PROS%>%
+separate(bigram, c("word1", "word2"), sep = " ")
+
+ALDI_bigrams_filtered_PROS <- ALDI_bigrams_separated_PROS%>%
+  filter(!word1 %in% stop_words$word) %>%
+  filter(!word2 %in% stop_words$word)%>%filter(!word1 %in% custom_stop_words$word) %>%
+  filter(!word2 %in% custom_stop_words$word)%>%unite(bigram, word1, word2, sep = " ")
+```
+
+```{r}
+#arrange bigrams in descending order
+ALDI_bigram_count_PROS <- ALDI_bigrams_filtered_PROS%>% ungroup()%>% count(bigram, sort = TRUE)
+```
+
+```{r}
+#remove row 2 as NA 
+ALDI_bigram_count_PROS<-ALDI_bigram_count_PROS[-1,]
+```
+```{r, class.source = 'fold-hide'}
+
+# arrange graphical display of top 5 Aldi bigrams
+B.ALDI.PRO<-ALDI_bigram_count_PROS%>%top_n(5)%>% mutate(bigram = reorder(bigram, n)) %>%ggplot(aes(bigram, n)) +
+geom_col(color = "tan1", fill = "navy") + 
+ggtitle("Top 5 Aldi bigram PROs bigrams given by Aldi employees") +
+xlab(NULL) +
+ylab(NULL) +
+coord_flip()
+```
+
+
+```{r}
+library(gridExtra)
+grid.arrange(BMCP, B.ALDI.PRO, nrow = 2)
+```
+
+Morrisons employees seem to place great value on `staff discounts`, whereas Aldi employees appear to appreciate `paid breaks` above all.
